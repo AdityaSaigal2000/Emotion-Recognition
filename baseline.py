@@ -1,12 +1,4 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Oct 12 13:40:49 2019
 
-@author: faisal
-"""
-
-# Decision Tree Classification
 
 # Importing the libraries
 import numpy as np
@@ -46,3 +38,30 @@ y_pred = classifier.predict(X_test)
 # Making the Confusion Matrix
 from sklearn.metrics import confusion_matrix
 cm = confusion_matrix(y_test, y_pred)
+
+'''
+import cv2
+
+def facechop(image):  
+    facedata = "haarcascade_frontalface_default.xml"
+    cascade = cv2.CascadeClassifier(facedata)
+
+    img = cv2.imread(image)
+
+    minisize = (img.shape[1],img.shape[0])
+    miniframe = cv2.resize(img, minisize)
+
+    faces = cascade.detectMultiScale(miniframe)
+
+    for f in faces:
+        x, y, w, h = [ v for v in f ]
+        cv2.rectangle(img, (x,y), (x+w,y+h), (255,255,255))
+
+        sub_face = img[y:y+h, x:x+w]
+        face_file_name = "faces/face_" + str(y) + ".jpg"
+        cv2.imwrite(face_file_name, sub_face)
+
+    cv2.imshow(image, img)
+
+    return
+'''
