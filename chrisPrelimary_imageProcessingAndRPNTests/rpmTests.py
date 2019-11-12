@@ -103,8 +103,8 @@ mid_channels = 512
 in_channels = 512 # depends on the output feature map. in vgg 16 it is equal to 512
 n_anchor = 9 # Number of anchors at each location
 conv1 = nn.Conv2d(in_channels, mid_channels, 3, 1, 1)
-reg_layer = nn.Conv2d(mid_channels, n_anchor *4, 1, 1, 0)
-cls_layer = nn.Conv2d(mid_channels, n_anchor *2, 1, 1, 0) ## I will be going to use softmax here. you can equally use sigmoid if u replace 2 with 1.
+reg_layer = nn.Conv2d(mid_channels, n_anchor*4, 1, 1, 0)
+cls_layer = nn.Conv2d(mid_channels, n_anchor*2, 1, 1, 0) ## I will be going to use softmax here. you can equally use sigmoid if u replace 2 with 1.
 
 
 # conv sliding layer

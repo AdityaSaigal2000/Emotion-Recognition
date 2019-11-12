@@ -11,9 +11,9 @@ class RPNFeatureExtractor(nn.Module):
         super(RPNFeatureExtractor, self).__init__()
         self.name = "rpnFeatureExtractor"
         
-        #use a dummy image to test when the output size of vgg network is below 800//16 and eliminate the rest
-        #off the layers
-        dummy_img = torch.zeros((1, 3, 800, 800)).float()
+        #use a dummy image to test when the output size of vgg network is below 50 and eliminate the rest
+        #of the layers
+        dummy_img = torch.zeros((1, 3, 210, 210)).float()#NOTE 210 is the size of the input image here
         #print(dummy_img)
         #make the model
         model = torchvision.models.vgg16(pretrained=True)
@@ -24,9 +24,9 @@ class RPNFeatureExtractor(nn.Module):
         k = dummy_img.clone()
         for i in fe:
             k = i(k)
-            if k.size()[2] < 800//16:
+            if k.size()[2] < 50:
                 break#trim off the remaining features with the incorrect output size
-            req_features.append(i)
+            req_features.append(i)#in this case it become 52*52 image with 256 input
             #out_channels = k.size()[1]
         #print(len(req_features)) #30
         #print(out_channels) # 512
@@ -41,14 +41,16 @@ class RPNmodel(nn.Module):
     def __init__(self):
         super(RPNmodel, self).__init__()
         self.name = "rpn"
-        
+        self.featureWidth = 52
+        self.featureChannels = 256
+        self.imageWidth = 210 #the original image width
         #help from: https://medium.com/@fractaldle/guide-to-build-faster-rcnn-in-pytorch-95b10c273439
-        self.mid_channels = 512
-        self.in_channels = 512 # depends on the output feature map. in vgg 16 it is equal to 512
+        self.mid_channels = 256 #this was originally 256
+        self.in_channels = self.featureChannels# Note this used to be 512 but the features are now 256 layers # for the output channels of vgg 16 feature extractor this is equal to 512
         self.n_anchor = 9 # Number of anchors at each location
         self.conv1 = nn.Conv2d(self.in_channels, self.mid_channels, 3, 1, 1)
-        self.reg_layer = nn.Conv2d(self.mid_channels, self.n_anchor *4, 1, 1, 0)
-        self.cls_layer = nn.Conv2d(self.mid_channels, self.n_anchor *2, 1, 1, 0) ## I will be going to use softmax here. you can equally use sigmoid if u replace 2 with 1.
+        self.reg_layer = nn.Conv2d(self.mid_channels, self.n_anchor*4, 1, 1, 0)
+        self.cls_layer = nn.Conv2d(self.mid_channels, self.n_anchor*2, 1, 1, 0) ## I will be going to use softmax here. you can equally use sigmoid if u replace 2 with 1.
 
 
         # conv sliding layer
@@ -75,17 +77,18 @@ class RPNmodel(nn.Module):
         pred_cls_scores = pred_cls_scores.permute(0, 2, 3, 1).contiguous()
         #print(pred_cls_scores)
         #Out torch.Size([1, 50, 50, 18])
-        objectness_score = pred_cls_scores.view(1, 50, 50, 9, 2)[:, :, :, :, 1].contiguous().view(1, -1)
+        objectness_score = pred_cls_scores.view(1, self.featureWidth, self.featureWidth, 9, 2)[:, :, :, :, 1].contiguous().view(1, -1)
+        #note that this used to be 50 by 50 but now the feature maps are 52 by 52
         #print(objectness_score.shape)
         #Out torch.Size([1, 22500])
         pred_cls_scores  = pred_cls_scores.view(1, -1, 2)
         #print(pred_cls_scores.shape)
         # Out torch.size([1, 22500, 2])
-        ROIs = proposeRegions(pred_anchor_locs, pred_cls_scores)
+        ROIs = proposeRegions(pred_anchor_locs, objectness_score, self.imageWidth, self.featureWidth)
         return ROIs
 
-def proposeRegions(pred_anchor_locs, objectness_score):
-    anchors = generateAnchors()
+def proposeRegions(pred_anchor_locs, objectness_score, imageWidth, featureWidth):
+    anchors = generateAnchors(featureWidth, imageWidth)
     nms_thresh = 0.7
     n_train_pre_nms = 12000
     n_train_post_nms = 2000
@@ -119,7 +122,7 @@ def proposeRegions(pred_anchor_locs, objectness_score):
     roi[:, 3::4] = ctr_x + 0.5 * w
 
     #clip the predicted boxes to the image
-    img_size = (800, 800) #Image size
+    img_size = (imageWidth, imageWidth) #Image size
     roi[:, slice(0, 4, 2)] = np.clip(roi[:, slice(0, 4, 2)], 0, img_size[0])
     roi[:, slice(1, 4, 2)] = np.clip(roi[:, slice(1, 4, 2)], 0, img_size[1])
     #print(roi)
@@ -134,12 +137,19 @@ def proposeRegions(pred_anchor_locs, objectness_score):
     #Out:
     ##(22500, ) all the boxes have minimum size of 16
 
+    #I THINK THIS IS AN ERROR IN THE TUTORIAL... RAVEL AND THEN ARGSORT PRODUCES INDICES GREATER THAN THE LENGTH OF THE ORIGINAL ARRAY
     #Sort all (proposal, score) pairs by score from highest to lowest
     order = score.ravel().argsort()[::-1]
+    #DOING THIS INSTEAD:
+    #for i in score:
     #print(order)
 
+    #order = order[order < len(roi)]#remove indices that are larger than the length of the roi array
+
     #Take top pre_nms_topN
-    order = order[:n_train_pre_nms]
+    #if the length of roi is less than the length of pre_nms then use it to avoid an error
+    order = order[:min(n_train_pre_nms,len(roi), len(order))]#THIS CAN BE SWITCHED TO TEST INSTEAD OF TRAIN
+   
     roi = roi[order, :]
     #print(roi.shape)
     #print(roi)
@@ -151,10 +161,11 @@ def proposeRegions(pred_anchor_locs, objectness_score):
     y2 = roi[:, 2]
     x2 = roi[:, 3]
     areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-    order = score.argsort()[::-1]
+    #order = score.argsort()[::-1]#commented this from the tutorial
     keep = []
     while order.size > 0:
         i = order[0]
+        keep += [i]#NOTE THAT THE TUTORIAL HAS A MISTAKE HERE IT FORGOT TO ADD TO THE keep ARRAY
         xx1 = np.maximum(x1[i], x1[order[1:]])
         yy1 = np.maximum(y1[i], y1[order[1:]])
         xx2 = np.minimum(x2[i], x2[order[1:]])
@@ -165,19 +176,21 @@ def proposeRegions(pred_anchor_locs, objectness_score):
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
         inds = np.where(ovr <= nms_thresh)[0]
         order = order[inds + 1]
-    keep = keep[:n_test_post_nms] # while training/testing , use accordingly
+        
+
+    keep = keep[:min(n_train_post_nms, len(roi), len(keep))] # while training/testing , use accordingly
     roi = roi[keep] # the final region proposals
     return roi
 
-def generateAnchors():
-    sub_sample = 16
+def generateAnchors(featureWidth, imageWidth):
+    sub_sample = int(imageWidth/featureWidth)#sub_sample is the ratio of the image width to the feature map width
 
     ratios = [0.5, 1, 2]
-    anchor_scales = [8, 16, 32]
-
+    anchor_scales = [4, 8, 16]
+    '''
     anchor_base = np.zeros((len(ratios) * len(anchor_scales), 4), dtype=np.float32)
     #print(anchor_base)
-
+    
     #make the anchor boundaries:
     ctr_y = sub_sample / 2.
     ctr_x = sub_sample / 2.
@@ -196,20 +209,20 @@ def generateAnchors():
             anchor_base[index, 2] = ctr_y + h / 2.
             anchor_base[index, 3] = ctr_x + w / 2.
 
-
+    '''
     #generating anchor points at the feature map locations
-    fe_size = (800//16)
-    ctr_x = np.arange(16, (fe_size+1) * 16, 16)
-    ctr_y = np.arange(16, (fe_size+1) * 16, 16)
+    #fe_size = (800//16)
+    ctr_x = np.arange(sub_sample, (featureWidth+1) * sub_sample, sub_sample)
+    ctr_y = np.arange(sub_sample, (featureWidth+1) * sub_sample, sub_sample)
 
     ctr = []
     index = 0
     for x in range(len(ctr_x)):
         for y in range(len(ctr_y)):
-            ctr += [[ctr_x[x] - 8, ctr_y[y] - 8]]
+            ctr += [[ctr_x[x] - int(sub_sample/2), ctr_y[y] - int(sub_sample/2)]]
             index +=1
 
-    anchors = np.zeros((fe_size * fe_size * 9, 4))
+    anchors = np.zeros((featureWidth * featureWidth * len(ratios)*len(anchor_scales), 4))
     index = 0
     for c in ctr:
         ctr_y, ctr_x = c
