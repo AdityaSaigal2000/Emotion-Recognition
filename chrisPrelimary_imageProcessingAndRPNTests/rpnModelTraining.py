@@ -452,7 +452,7 @@ def training(imageWidth, featureWidth, rpnModel, trainingFeatureMapInput, bounda
     rpn_loss = rpn_cls_loss + (rpn_lambda * rpn_loc_loss)
     #print(rpn_loss)
     #Out:0.00248
-    return rpn_loss, ROIs
+    return rpn_loss
 
 '''
 def testingRaw():
