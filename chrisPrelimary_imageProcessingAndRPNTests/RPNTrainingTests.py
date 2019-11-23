@@ -2,7 +2,7 @@ import cv2
 import os
 import detectFaces
 import rpnModelTraining
-
+import torch.optim as optim
 
 
 import os
@@ -100,9 +100,19 @@ for imgs in train_loader:
   outputROIs, a, b, c, d = RPN(featuresOut)
   print(outputROIs.shape)
   print(outputROIs)
-
-
-  print("loss:" + str(rpnModelTraining.training(210, 52, RPN, featuresOut, [])))
+  
+  optimizer = optim.SGD(RPN.parameters(), lr=0.01, momentum=0.9)
+  for i in range(100):
+    
+    loss = rpnModelTraining.training(210, 52, RPN, featuresOut, [])
+    print("loss:" + str(loss))
+    #double_loss = loss.FloatTensor()
+    #float_loss = loss.to(dtype=torch.float32)
+    #print(double_loss)
+    loss.backward(retain_graph=True)               # backward pass (compute parameter updates)
+    optimizer.step()              # make the updates for each parameter
+    optimizer.zero_grad()         # a clean up step for PyTorch
+    print(RPN.parameters)
   #features = alexNet.features(imgs)
   #print(features.shape)
 

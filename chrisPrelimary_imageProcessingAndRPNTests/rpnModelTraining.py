@@ -407,7 +407,7 @@ def training(imageWidth, featureWidth, rpnModel, trainingFeatureMapInput, bounda
     #some minor rearranging
     rpn_loc = pred_anchor_locs[0]
     rpn_score = pred_cls_scores[0]
-    gt_rpn_loc = torch.from_numpy(anchor_locations)
+    gt_rpn_loc = torch.from_numpy(anchor_locations.astype(np.float32))
     gt_rpn_score = torch.from_numpy(anchor_labels)
     #print(rpn_loc.shape, rpn_score.shape, gt_rpn_loc.shape, gt_rpn_score.shape)
 
@@ -437,8 +437,12 @@ def training(imageWidth, featureWidth, rpnModel, trainingFeatureMapInput, bounda
     # torch.Size([6, 4]) torch.Size([6, 4])
 
     #find the location (regression) loss
+    '''
     x = torch.abs(mask_loc_targets.double() - mask_loc_preds.double())
     rpn_loc_loss = ((x < 1).double() * 0.5 * x**2) + ((x >= 1).double() * (x-0.5))
+    '''
+    x = torch.abs(mask_loc_targets - mask_loc_preds)
+    rpn_loc_loss = ((x < 1).float() * 0.5 * x**2) + ((x >= 1).float() * (x-0.5))
     #print(rpn_loc_loss.sum())
     #Out:
     # Variable containing:
@@ -447,7 +451,7 @@ def training(imageWidth, featureWidth, rpnModel, trainingFeatureMapInput, bounda
 
     #find total loss. class loss is applied on all the bounding boxes and regression loss is applied only positive bounding box
     rpn_lambda = 10.
-    N_reg = (gt_rpn_score >0).double().sum()
+    N_reg = (gt_rpn_score >0).sum()#used to be .double().sum()
     rpn_loc_loss = rpn_loc_loss.sum() / N_reg
     rpn_loss = rpn_cls_loss + (rpn_lambda * rpn_loc_loss)
     #print(rpn_loss)
