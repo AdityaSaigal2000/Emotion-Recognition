@@ -55,13 +55,13 @@ images = load_images(path+outputImagesFolder)
 #print(len(images))
 
 #show the images
-'''
+
 fig = plt.figure(figsize=(25, 4))
 for idx in range(0,len(images)):
   ax = fig.add_subplot(2, len(images)/2, idx+1, xticks=[], yticks=[])
   plt.imshow(images[idx])
 plt.show()
-'''
+
 
 # define dataloader parameters
 batch_size  = 1
@@ -95,7 +95,7 @@ for imgs in train_loader:
   for i in range(64):
     plt.subplot(8, 8, i+1)
     plt.imshow(features[0, i])
-  #plt.show()
+  plt.show()
   
   outputROIs, a, b, c, d = RPN(featuresOut)
   print(outputROIs.shape)

@@ -78,7 +78,7 @@ dataiter = iter(data_loader)
 imagesRaw, labelsRaw = dataiter.next()
 imagesnp = imagesRaw.numpy() # convert images to numpy for display
 labelsnp = labelsRaw.numpy()
-
+print(imagesnp.shape)
 # plot the images in the batch, along with the corresponding labels
 '''
 fig = plt.figure(figsize=(25, 4))
